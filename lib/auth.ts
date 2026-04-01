@@ -4,6 +4,9 @@ import { normalizeLogin } from "@/lib/user-validation";
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 
+/** NextAuth requires this in production or it returns the generic "server configuration" error. */
+const authSecret = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET;
+
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
@@ -34,7 +37,7 @@ export const authOptions: NextAuthOptions = {
   ],
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: authSecret,
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
