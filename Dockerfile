@@ -12,4 +12,6 @@ RUN npm run build
 
 EXPOSE 3000
 
-CMD ["npm", "start"]
+RUN chmod +x scripts/railway-start.sh
+
+CMD ["./scripts/railway-start.sh"]

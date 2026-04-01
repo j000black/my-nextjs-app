@@ -8,7 +8,8 @@ export async function GET() {
       { status: "ok", db: "up", timestamp: new Date().toISOString() },
       { status: 200 },
     );
-  } catch {
+  } catch (error) {
+    console.error("Health check database query failed:", error);
     return Response.json(
       { status: "error", db: "down", timestamp: new Date().toISOString() },
       { status: 503 },

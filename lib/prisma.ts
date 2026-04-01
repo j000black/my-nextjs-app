@@ -6,11 +6,19 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient(): PrismaClient {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
+  const rawConnectionString = process.env.DATABASE_URL;
+  if (!rawConnectionString) {
     throw new Error("DATABASE_URL is not set.");
   }
-  const adapter = new PrismaPg({ connectionString });
+
+  const parsedUrl = new URL(rawConnectionString);
+  const isLocalDatabaseHost = parsedUrl.hostname === "localhost" || parsedUrl.hostname === "127.0.0.1";
+  // Railway-managed Postgres often requires TLS. Keep local development unchanged.
+  if (!isLocalDatabaseHost && !parsedUrl.searchParams.has("sslmode")) {
+    parsedUrl.searchParams.set("sslmode", "require");
+  }
+
+  const adapter = new PrismaPg({ connectionString: parsedUrl.toString() });
   return new PrismaClient({ adapter });
 }
 
