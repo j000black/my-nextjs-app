@@ -21,25 +21,23 @@ function createPrismaClient(): PrismaClient {
 
   const parsedUrl = new URL(rawConnectionString);
   const hostname = parsedUrl.hostname;
+  const isLocalish = skipAutoTls(hostname);
 
-  // Hosted Postgres (e.g. Railway TCP proxy) usually expects TLS; local/docker does not.
-  if (!skipAutoTls(hostname) && !parsedUrl.searchParams.has("sslmode")) {
-    parsedUrl.searchParams.set("sslmode", "require");
+  // `node-pg` reads `sslmode` from the URL and can enforce certificate verification there,
+  // which ignores `PoolConfig.ssl` and causes P2010 on Railway-style chains.
+  // For hosted DBs, drop URL sslmode and rely on explicit `ssl` below.
+  if (!isLocalish) {
+    parsedUrl.searchParams.delete("sslmode");
   }
 
   const connectionString = parsedUrl.toString();
-  const sslmode = parsedUrl.searchParams.get("sslmode")?.toLowerCase() ?? "";
-  const usesVerifiedTls =
-    sslmode === "require" ||
-    sslmode === "verify-full" ||
-    sslmode === "verify-ca" ||
-    sslmode === "no-verify";
 
-  // Railway and similar hosts often use a chain Node does not trust (P2010 self-signed).
-  const adapter = new PrismaPg({
-    connectionString,
-    ...(usesVerifiedTls ? { ssl: { rejectUnauthorized: false } } : {}),
-  });
+  const adapter = isLocalish
+    ? new PrismaPg({ connectionString })
+    : new PrismaPg({
+        connectionString,
+        ssl: { rejectUnauthorized: false },
+      });
 
   return new PrismaClient({ adapter });
 }
