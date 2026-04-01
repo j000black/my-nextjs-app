@@ -5,6 +5,14 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
+function skipAutoTls(hostname: string): boolean {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "db" // docker-compose service name
+  );
+}
+
 function createPrismaClient(): PrismaClient {
   const rawConnectionString = process.env.DATABASE_URL;
   if (!rawConnectionString) {
@@ -12,13 +20,27 @@ function createPrismaClient(): PrismaClient {
   }
 
   const parsedUrl = new URL(rawConnectionString);
-  const isLocalDatabaseHost = parsedUrl.hostname === "localhost" || parsedUrl.hostname === "127.0.0.1";
-  // Railway-managed Postgres often requires TLS. Keep local development unchanged.
-  if (!isLocalDatabaseHost && !parsedUrl.searchParams.has("sslmode")) {
+  const hostname = parsedUrl.hostname;
+
+  // Hosted Postgres (e.g. Railway TCP proxy) usually expects TLS; local/docker does not.
+  if (!skipAutoTls(hostname) && !parsedUrl.searchParams.has("sslmode")) {
     parsedUrl.searchParams.set("sslmode", "require");
   }
 
-  const adapter = new PrismaPg({ connectionString: parsedUrl.toString() });
+  const connectionString = parsedUrl.toString();
+  const sslmode = parsedUrl.searchParams.get("sslmode")?.toLowerCase() ?? "";
+  const usesVerifiedTls =
+    sslmode === "require" ||
+    sslmode === "verify-full" ||
+    sslmode === "verify-ca" ||
+    sslmode === "no-verify";
+
+  // Railway and similar hosts often use a chain Node does not trust (P2010 self-signed).
+  const adapter = new PrismaPg({
+    connectionString,
+    ...(usesVerifiedTls ? { ssl: { rejectUnauthorized: false } } : {}),
+  });
+
   return new PrismaClient({ adapter });
 }
 
